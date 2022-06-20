@@ -1,95 +1,36 @@
-use std::collections::VecDeque;
+mod random;
+mod snake;
 
-pub type Position = (usize, usize);
+use std::{cell::RefCell, rc::Rc};
 
-#[derive(Debug)]
-pub enum Direction {
-    Top,
-    Right,
-    Bottom,
-    Left
+use js_sys::Function;
+use snake::SnakeGame;
+use wasm_bindgen::{
+    prelude::{wasm_bindgen, Closure},
+    JsCast, UnwrapThrowExt,
+};
+use web_sys::{console, window};
+
+thread_local! {
+    static GAME: Rc<RefCell<SnakeGame>> = Rc::new(RefCell::new(SnakeGame::new(20, 20)));
+
+    static TICK_CLOSURE: Closure<dyn FnMut()> = Closure::wrap(Box::new({
+        let game = GAME.with(|game| game.clone());
+        move || game.borrow_mut().tick()
+    }) as Box<dyn FnMut()>);
 }
 
-#[derive(Debug)]
-pub struct SnakeGame {
-    width: usize,
-    height: usize,
-    // Head is the first item, tail is the last item
-    // Since it's ordered.
-    snake: VecDeque<Position>,
-    direction: Direction,
-    food: Position,
-    lost: bool,
-}
+#[wasm_bindgen(start)]
+pub fn main() {
+    console::log_1(&"Starting ...".into());
 
-impl SnakeGame {
-    pub fn new(width: usize, height: usize) -> Self {
-        Self {
-            width,
-            height,
-            snake: [((width - 2).max(0), (height / 2))].into_iter().collect(),
-            direction: Direction::Left,
-            food: {(2.min(width - 1), height / 2)},
-            lost: false,
-        }
-    }
-
-    pub fn change_direction(&mut self, direction: Direction) {
-        match (&self.direction, direction) {
-            (Direction::Top, Direction::Top) |
-            (Direction::Top, Direction::Bottom) |
-            (Direction::Right, Direction::Right) |
-            (Direction::Right, Direction::Left) |
-            (Direction::Bottom, Direction::Top) |
-            (Direction::Bottom, Direction::Bottom) |
-            (Direction::Left, Direction::Right) |
-            (Direction::Left, Direction::Left) => {}
-            (_, direction) => {
-                self.direction = direction
-            }
-        }
-    }
-
-    pub fn is_valid(&mut self, (x, y): Position) -> bool {
-        x < self.width && y < self.height
-    }
-    
-    pub fn tick(&mut self) {
-        if self.lost {
-            return;
-        }
-        // Move the snake by removing the last item, and adding to the first item.
-        // This functions a lot like a double ended queue.
-        let head = self.snake.get(0);
-        
-        let new_head = head.map(|&(x,y)| match self.direction {
-            Direction::Top => (x, y - 1),
-            Direction::Right => (x + 1, y),
-            Direction::Bottom => (x, y + 1),
-            Direction::Left => (x - 1, y),
-        });
-
-        
-        if let Some(new_head) = new_head {
-            if !self.is_valid(new_head) || self.snake.contains(&new_head) {
-                self.lost = true;
-            } else {
-                // Remove the tail
-                self.snake.pop_back();
-                // Add to the head
-                self.snake.push_front(new_head);
-            }
-
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-     use crate::SnakeGame;
-     
-     #[test]
-     fn test() {
-         println!("{:?}", SnakeGame::new(10, 10));
-     }
+    TICK_CLOSURE.with(|closure| {
+        window()
+            .unwrap_throw()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().dyn_ref::<Function>().unwrap_throw(),
+                500,
+            )
+            .unwrap_throw();
+    });
 }
