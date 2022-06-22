@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 
 pub type Position = (usize, usize);
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Direction {
     Top,
     Right,
@@ -13,14 +13,15 @@ pub enum Direction {
 
 #[derive(Debug)]
 pub struct SnakeGame {
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
     // Head is the first item, tail is the last item
     // Since it's ordered.
-    snake: VecDeque<Position>,
-    direction: Direction,
-    food: Position,
-    finished: bool,
+    pub snake: VecDeque<Position>,
+    pub direction: Direction,
+    next_direction: Direction,
+    pub food: Position,
+    pub finished: bool,
 }
 
 impl SnakeGame {
@@ -30,12 +31,16 @@ impl SnakeGame {
             height,
             snake: [((width - 2).max(0), (height / 2))].into_iter().collect(),
             direction: Direction::Left,
+            next_direction: Direction::Left,
             food: { (2.min(width - 1), height / 2) },
             finished: false,
         }
     }
 
     pub fn change_direction(&mut self, direction: Direction) {
+        if self.finished {
+            return;
+        }
         match (&self.direction, direction) {
             (Direction::Top, Direction::Top)
             | (Direction::Top, Direction::Bottom)
@@ -45,7 +50,7 @@ impl SnakeGame {
             | (Direction::Bottom, Direction::Bottom)
             | (Direction::Left, Direction::Right)
             | (Direction::Left, Direction::Left) => {}
-            (_, direction) => self.direction = direction,
+            (_, direction) => self.next_direction = direction,
         }
     }
 
@@ -57,6 +62,8 @@ impl SnakeGame {
         if self.finished || self.snake.len() == 0 {
             return;
         }
+
+        self.direction = self.next_direction;
         // Move the snake by removing the last item, and adding to the first item.
         // This functions a lot like a double ended queue.
         let (x, y) = self.snake[0];
